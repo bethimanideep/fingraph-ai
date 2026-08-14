@@ -13,7 +13,14 @@ export interface DBStatus {
   error?: string;
 }
 
-export function getDriver(): Driver | null {
+export function resetDriver() {
+  if (driver) {
+    driver.close().catch(() => {});
+    driver = null;
+  }
+}
+
+export function getDriver(forceNew: boolean = false): Driver | null {
   const uri = process.env.COGNODB_URI;
   const user = process.env.COGNODB_USER || 'cognodb';
   const password = process.env.COGNODB_PASSWORD;
@@ -22,18 +29,27 @@ export function getDriver(): Driver | null {
     return null;
   }
 
+  if (forceNew) {
+    resetDriver();
+  }
+
   if (!driver) {
     try {
       driver = neo4j.driver(
         uri,
         neo4j.auth.basic(user, password),
         {
-          maxConnectionPoolSize: 50,
-          connectionTimeout: 5000,
+          maxConnectionPoolSize: 10,
+          maxConnectionLifetime: 25 * 1000, // 25s lifetime to prevent stale serverless sockets
+          connectionTimeout: 8000,
+          connectionAcquisitionTimeout: 8000,
           logging: {
-            level: 'info',
+            level: 'warn',
             logger: (level, message) => {
-              if (level === 'error') console.error(`[Neo4j Driver ${level}]`, message);
+              // Silence expected serverless idle socket disconnect notices
+              if (!message.includes('Connection was closed by server') && !message.includes('ECONNRESET')) {
+                console.warn(`[Neo4j Driver] ${message}`);
+              }
             }
           }
         }
@@ -48,73 +64,97 @@ export function getDriver(): Driver | null {
 }
 
 export async function verifyConnection(): Promise<DBStatus> {
-  const activeDriver = getDriver();
-  if (!activeDriver) {
-    return {
-      isConnected: false,
-      mode: 'MOCK_FALLBACK',
-      message: 'Unconfigured environment variables. COGNODB_URI or COGNODB_PASSWORD missing.',
-      error: 'COGNODB_URI or COGNODB_PASSWORD environment variable is not configured.'
-    };
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const activeDriver = getDriver(attempt > 1);
+    if (!activeDriver) {
+      return {
+        isConnected: false,
+        mode: 'MOCK_FALLBACK',
+        message: 'Unconfigured environment variables. COGNODB_URI or COGNODB_PASSWORD missing.',
+        error: 'COGNODB_URI or COGNODB_PASSWORD environment variable is not configured.'
+      };
+    }
+
+    try {
+      const serverInfo = await activeDriver.verifyConnectivity();
+      return {
+        isConnected: true,
+        mode: 'LIVE_COGNODB',
+        serverInfo: serverInfo.address || process.env.COGNODB_URI || '',
+        message: 'Successfully connected to CognoDB Cloud.'
+      };
+    } catch (err: any) {
+      resetDriver();
+      if (attempt === 2) {
+        return {
+          isConnected: false,
+          mode: 'MOCK_FALLBACK',
+          message: 'Unable to connect to CognoDB Cloud graph database.',
+          error: err.message
+        };
+      }
+    }
   }
 
-  try {
-    const serverInfo = await activeDriver.verifyConnectivity();
-    return {
-      isConnected: true,
-      mode: 'LIVE_COGNODB',
-      serverInfo: serverInfo.address || process.env.COGNODB_URI || '',
-      message: 'Successfully connected to CognoDB Cloud.'
-    };
-  } catch (err: any) {
-    console.warn('⚠️ CognoDB connection verification failed:', err.message);
-    return {
-      isConnected: false,
-      mode: 'MOCK_FALLBACK',
-      message: 'Unable to connect to CognoDB Cloud graph database.',
-      error: err.message
-    };
-  }
+  return {
+    isConnected: false,
+    mode: 'MOCK_FALLBACK',
+    message: 'Unable to connect to CognoDB Cloud graph database.'
+  };
 }
 
 export async function executeCypher(cypher: string, params: Record<string, any> = {}) {
-  const activeDriver = getDriver();
-  
-  if (!activeDriver) {
-    throw new Error('DATABASE_OFFLINE: CognoDB driver is unconfigured or unreachable.');
-  }
-
-  const session: Session = activeDriver.session({ defaultAccessMode: neo4j.session.READ });
-  const startTime = Date.now();
-
-  try {
-    const result = await session.run(cypher, params);
-    const executionTimeMs = Date.now() - startTime;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const activeDriver = getDriver(attempt > 1);
     
-    const records = result.records.map(record => {
-      const row: Record<string, any> = {};
-      record.keys.forEach((key: any) => {
-        row[String(key)] = formatNeo4jValue(record.get(key));
-      });
-      return row;
-    });
+    if (!activeDriver) {
+      throw new Error('DATABASE_OFFLINE: CognoDB driver is unconfigured or unreachable.');
+    }
 
-    return {
-      records,
-      summary: {
-        executionTimeMs,
-        resultAvailableAfter: result.summary.resultAvailableAfter?.toNumber?.() || 0,
-        resultConsumedAfter: result.summary.resultConsumedAfter?.toNumber?.() || 0,
-        counters: (result.summary.counters as any)?._stats || {}
-      },
-      isLive: true
-    };
-  } catch (err: any) {
-    console.error('Cypher Execution Error:', err.message);
-    throw err;
-  } finally {
-    await session.close();
+    const session: Session = activeDriver.session({ defaultAccessMode: neo4j.session.READ });
+    const startTime = Date.now();
+
+    try {
+      const result = await session.run(cypher, params);
+      const executionTimeMs = Date.now() - startTime;
+      
+      const records = result.records.map(record => {
+        const row: Record<string, any> = {};
+        record.keys.forEach((key: any) => {
+          row[String(key)] = formatNeo4jValue(record.get(key));
+        });
+        return row;
+      });
+
+      return {
+        records,
+        summary: {
+          executionTimeMs,
+          resultAvailableAfter: result.summary.resultAvailableAfter?.toNumber?.() || 0,
+          resultConsumedAfter: result.summary.resultConsumedAfter?.toNumber?.() || 0,
+          counters: (result.summary.counters as any)?._stats || {}
+        },
+        isLive: true
+      };
+    } catch (err: any) {
+      resetDriver();
+      const isRetriable = 
+        err.message?.includes('closed by server') || 
+        err.message?.includes('ECONNRESET') || 
+        err.message?.includes('ServiceUnavailable') ||
+        err.name === 'Neo4jError';
+
+      if (attempt === 1 && isRetriable) {
+        // Retry once with a fresh driver instance
+        continue;
+      }
+      throw err;
+    } finally {
+      await session.close().catch(() => {});
+    }
   }
+
+  throw new Error('DATABASE_OFFLINE: Failed to execute query after reconnection attempt.');
 }
 
 export function formatNeo4jValue(val: any): any {
@@ -139,7 +179,7 @@ export function formatNeo4jValue(val: any): any {
         properties: formatNeo4jValue(val.properties)
       };
     }
-    if (val.start !== undefined && val.end !== undefined) {
+    if (val.start && val.end && val.segments) {
       return {
         start: formatNeo4jValue(val.start),
         end: formatNeo4jValue(val.end),
@@ -149,18 +189,10 @@ export function formatNeo4jValue(val: any): any {
       };
     }
     const formattedObj: Record<string, any> = {};
-    Object.keys(val).forEach(k => {
-      formattedObj[k] = formatNeo4jValue((val as any)[k]);
-    });
+    for (const [k, v] of Object.entries(val)) {
+      formattedObj[k] = formatNeo4jValue(v);
+    }
     return formattedObj;
   }
-  
   return val;
-}
-
-export async function closeDriver() {
-  if (driver) {
-    await driver.close();
-    driver = null;
-  }
 }
