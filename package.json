@@ -1,0 +1,36 @@
+{
+  "name": "fingraph-ai",
+  "version": "1.0.0",
+  "description": "Financial Crime & Fraud Ring Intelligence Platform backed by CognoDB graph database",
+  "main": "dist/server/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server/index.js",
+    "dev": "nodemon --watch src --exec ts-node src/server/index.ts",
+    "seed": "ts-node scripts/seed.ts"
+  },
+  "keywords": [
+    "cognodb",
+    "neo4j",
+    "opencypher",
+    "graph-database",
+    "fraud-detection",
+    "financial-crime"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "neo4j-driver": "^5.26.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.1",
+    "nodemon": "^3.1.9",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  }
+}

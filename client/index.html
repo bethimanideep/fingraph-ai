@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinGraph AI — Graph Intelligence & AML Investigation Workbench</title>
+  <meta name="description" content="Financial crime intelligence, money laundering detection, and fraud ring analysis platform powered by CognoDB Cloud Graph Database and openCypher.">
+  
+  <!-- Web Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="app-layout">
+    
+    <!-- Database Connection Alert (Shown only when database is unreachable) -->
+    <div class="system-alert-banner hidden" id="dbAlertBanner" role="alert">
+      <div class="system-alert-content">
+        <i class="fa-solid fa-circle-exclamation alert-icon"></i>
+        <div class="alert-text">
+          <strong class="alert-title">Database Disconnected</strong>
+          <span class="alert-desc" id="dbAlertMessage">Unable to reach CognoDB Cloud. Verify COGNODB_URI and COGNODB_PASSWORD credentials in .env.</span>
+        </div>
+      </div>
+      <button class="btn btn-secondary btn-xs" id="btnRetryDbConnection">
+        <i class="fa-solid fa-rotate"></i> Reconnect
+      </button>
+    </div>
+
+    <!-- Application Top Navigation Bar -->
+    <header class="top-nav">
+      <div class="nav-left">
+        <div class="brand-mark">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="6" cy="6" r="3"></circle>
+            <circle cx="18" cy="6" r="3"></circle>
+            <circle cx="18" cy="18" r="3"></circle>
+            <circle cx="6" cy="18" r="3"></circle>
+            <line x1="9" y1="6" x2="15" y2="6"></line>
+            <line x1="9" y1="18" x2="15" y2="18"></line>
+            <line x1="6" y1="9" x2="6" y2="15"></line>
+            <line x1="18" y1="9" x2="18" y2="15"></line>
+          </svg>
+        </div>
+        <div class="brand-title-group">
+          <span class="brand-name">FinGraph <span class="brand-tag">INTELLIGENCE</span></span>
+        </div>
+
+        <div class="divider-v"></div>
+
+        <div class="connection-status" id="dbStatusPill" title="Database Connection Status">
+          <span class="status-indicator" id="statusPulseDot"></span>
+          <span class="status-text" id="dbStatusText">Connected</span>
+        </div>
+      </div>
+
+      <!-- Quick Metrics Strip -->
+      <div class="nav-metrics">
+        <div class="metric-cell">
+          <span class="metric-num" id="nodeCountVal">--</span>
+          <span class="metric-name">Entities</span>
+        </div>
+        <div class="metric-cell">
+          <span class="metric-num" id="relCountVal">--</span>
+          <span class="metric-name">Relationships</span>
+        </div>
+        <div class="metric-cell cell-alert">
+          <span class="metric-num" id="flaggedCountVal">--</span>
+          <span class="metric-name">Flagged</span>
+        </div>
+      </div>
+
+      <!-- Action Controls -->
+      <div class="nav-actions">
+        <button class="btn btn-secondary btn-sm" id="btnResetView" title="Reset graph canvas to full network topology">
+          <i class="fa-solid fa-arrows-rotate"></i>
+          <span>Reset View</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace Container -->
+    <main class="workspace-layout" id="workspaceGrid">
+      
+      <!-- Left Sidebar: Patterns & Entity Search -->
+      <aside class="sidebar-column left-sidebar" id="leftPanel">
+        
+        <!-- Search Section -->
+        <div class="sidebar-section">
+          <div class="section-header">
+            <h2>Find Entity</h2>
+          </div>
+          <div class="search-input-wrapper">
+            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+            <input type="text" id="searchInput" class="search-input" placeholder="Search by name, ID, or IP..." autocomplete="off" />
+          </div>
+          
+          <div class="filter-pills-row">
+            <span class="filter-label">Filter:</span>
+            <div class="pills-container">
+              <button class="filter-pill active" data-type="ALL">All</button>
+              <button class="filter-pill" data-type="Account">Accounts</button>
+              <button class="filter-pill" data-type="Person">Persons</button>
+              <button class="filter-pill" data-type="Company">Entities</button>
+              <button class="filter-pill" data-type="Device">Devices</button>
+              <button class="filter-pill" data-type="IPAddress">IPs</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Investigation Patterns Section -->
+        <div class="sidebar-section scrollable-section">
+          <div class="section-header">
+            <h2>AML Detection Queries</h2>
+            <span class="section-badge">openCypher</span>
+          </div>
+
+          <div class="pattern-list">
+            
+            <div class="pattern-item" id="algoCircular">
+              <div class="pattern-status-bar bar-purple"></div>
+              <div class="pattern-content">
+                <div class="pattern-title-row">
+                  <span class="pattern-title">Circular Money Laundering</span>
+                  <span class="pattern-badge">3–6 HOPS</span>
+                </div>
+                <p class="pattern-desc">Detect cyclic fund transfers ($A \to B \to C \to A$) evading AML thresholds.</p>
+              </div>
+            </div>
+
+            <div class="pattern-item" id="algoSybil">
+              <div class="pattern-status-bar bar-amber"></div>
+              <div class="pattern-content">
+                <div class="pattern-title-row">
+                  <span class="pattern-title">Shared Infrastructure Ring</span>
+                  <span class="pattern-badge">SYBIL</span>
+                </div>
+                <p class="pattern-desc">Identify distinct accounts sharing rooted emulators or TOR exit nodes.</p>
+              </div>
+            </div>
+
+            <div class="pattern-item" id="algoShortestPath">
+              <div class="pattern-status-bar bar-blue"></div>
+              <div class="pattern-content">
+                <div class="pattern-title-row">
+                  <span class="pattern-title">Sanctioned Trail Trace</span>
+                  <span class="pattern-badge">SHORTEST PATH</span>
+                </div>
+                <p class="pattern-desc">Calculate shortest graph path between source accounts and OFAC vaults.</p>
+              </div>
+            </div>
+
+            <div class="pattern-item" id="algoBlastRadius">
+              <div class="pattern-status-bar bar-red"></div>
+              <div class="pattern-content">
+                <div class="pattern-title-row">
+                  <span class="pattern-title">Exposure Blast Radius</span>
+                  <span class="pattern-badge">RISK SPREAD</span>
+                </div>
+                <p class="pattern-desc">Evaluate multi-hop exposure propagation from confirmed high-risk nodes.</p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Legend Footer Section -->
+        <div class="sidebar-section legend-box">
+          <div class="section-header">
+            <h2>Schema Legend</h2>
+          </div>
+          <div class="legend-items-list">
+            <div class="legend-entry"><span class="legend-bullet bg-account"></span> Account (Clean)</div>
+            <div class="legend-entry"><span class="legend-bullet bg-flagged"></span> Account (Flagged)</div>
+            <div class="legend-entry"><span class="legend-bullet bg-sanctioned"></span> Crypto Vault (Sanctioned)</div>
+            <div class="legend-entry"><span class="legend-bullet bg-person"></span> Person / Beneficial Owner</div>
+            <div class="legend-entry"><span class="legend-bullet bg-company"></span> Corporate Entity / Shell</div>
+            <div class="legend-entry"><span class="legend-bullet bg-device"></span> Hardware / Device Fingerprint</div>
+            <div class="legend-entry"><span class="legend-bullet bg-ip"></span> IP Address / Proxy Node</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center: Graph Visualization Viewport -->
+      <section class="canvas-viewport" id="centerPanel">
+        
+        <!-- Viewport Toolbar -->
+        <div class="viewport-header">
+          <div class="viewport-status">
+            <span class="view-indicator-dot"></span>
+            <span class="viewport-query-label" id="activeQueryLabel">Graph Topology Overview</span>
+          </div>
+          
+          <div class="viewport-controls">
+            <button class="tool-btn" id="btnZoomIn" title="Zoom In">
+              <i class="fa-solid fa-plus"></i>
+            </button>
+            <button class="tool-btn" id="btnZoomOut" title="Zoom Out">
+              <i class="fa-solid fa-minus"></i>
+            </button>
+            <button class="tool-btn" id="btnFitCanvas" title="Fit to Screen">
+              <i class="fa-solid fa-expand"></i>
+            </button>
+            <div class="divider-v-sm"></div>
+            <button class="tool-btn" id="btnTogglePhysics" title="Toggle Force Physics Simulation">
+              <i class="fa-solid fa-atom"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- HTML5 Canvas Element Container -->
+        <div class="canvas-wrapper" id="canvasContainer">
+          <canvas id="graphCanvas"></canvas>
+          
+          <!-- Loading Overlay -->
+          <div class="canvas-loader hidden" id="loadingOverlay">
+            <div class="loader-spinner"></div>
+            <span class="loader-text">Executing openCypher query...</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Sidebar: Entity Inspector & Explainability -->
+      <aside class="sidebar-column right-sidebar" id="rightPanel">
+        
+        <!-- Tab Navigation -->
+        <div class="tab-bar">
+          <button class="tab-nav-btn active" data-tab="tabEntity">
+            <i class="fa-solid fa-id-card"></i>
+            <span>Entity Inspector</span>
+          </button>
+          <button class="tab-nav-btn" data-tab="tabPath">
+            <i class="fa-solid fa-route"></i>
+            <span>Path Tracer</span>
+          </button>
+        </div>
+
+        <!-- Tab 1: Entity Inspector & Risk Explainability -->
+        <div class="tab-body active" id="tabEntity">
+          
+          <!-- Empty State -->
+          <div class="inspector-empty-state" id="inspectorPlaceholder">
+            <div class="empty-icon-wrap">
+              <i class="fa-solid fa-arrow-pointer"></i>
+            </div>
+            <p class="empty-title">No Node Selected</p>
+            <p class="empty-sub">Select any node on the graph canvas to inspect its transaction history, risk scoring, and graph explainability evidence.</p>
+          </div>
+
+          <!-- Populated Inspector Content -->
+          <div class="inspector-content hidden" id="inspectorDetails">
+            
+            <!-- Entity Meta Card -->
+            <div class="entity-summary-card">
+              <div class="entity-badge-row">
+                <span class="entity-type-tag" id="entityTypeBadge">ACCOUNT</span>
+                <span class="entity-severity-badge" id="entityStatusPill">FLAGGED</span>
+              </div>
+              <h3 class="entity-name" id="entityTitle">ACC-101</h3>
+            </div>
+
+            <!-- Risk Score Gauge -->
+            <div class="risk-score-box">
+              <div class="risk-header">
+                <span class="risk-label">AML Risk Score</span>
+                <span class="risk-numeric" id="riskScoreVal">92 / 100</span>
+              </div>
+              <div class="risk-track">
+                <div class="risk-fill" id="riskMeterFill" style="width: 92%;"></div>
+              </div>
+            </div>
+
+            <!-- Graph Risk Explainability (Wexa Assignment Key Feature) -->
+            <div class="explainability-panel">
+              <div class="explain-header">
+                <i class="fa-solid fa-network-wired"></i>
+                <span>Graph Risk Explainability</span>
+              </div>
+              <ul class="explainability-checklist" id="explainabilityList">
+                <!-- Dynamically populated -->
+              </ul>
+            </div>
+
+            <!-- Properties Key-Value Table -->
+            <div class="props-section">
+              <div class="section-subhead">Node Properties</div>
+              <div class="props-grid-container">
+                <table class="props-grid">
+                  <tbody id="entityPropsTable">
+                    <!-- Dynamically populated -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Connected Relationships Section -->
+            <div class="relations-section">
+              <div class="section-subhead">
+                <span>Adjacent Relationships</span>
+                <span class="subhead-count" id="relCount">0</span>
+              </div>
+              <div class="rel-items-stack" id="connectedRelList">
+                <!-- Dynamically populated -->
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Tab 2: Path Finder -->
+        <div class="tab-body" id="tabPath">
+          <div class="path-tracer-box">
+            <div class="section-subhead">Trace Shortest Money Trail</div>
+            <p class="form-helper-text">Find the multi-hop transaction chain connecting two entities across the network.</p>
+
+            <div class="form-field">
+              <label for="sourceAccountSelect">Source Account</label>
+              <select id="sourceAccountSelect" class="form-select">
+                <option value="ACC-104">ACC-104 (Alexander Vance — FLAGGED)</option>
+                <option value="ACC-101">ACC-101 (Apex Zenith — FLAGGED)</option>
+                <option value="ACC-401">ACC-401 (Sarah Jenkins — NORMAL)</option>
+              </select>
+            </div>
+
+            <div class="form-field">
+              <label for="targetAccountSelect">Target Account / Vault</label>
+              <select id="targetAccountSelect" class="form-select">
+                <option value="ACC-999">ACC-999 (Sanctioned Crypto Vault)</option>
+                <option value="ACC-101">ACC-101 (Apex Zenith — FLAGGED)</option>
+                <option value="ACC-201">ACC-201 (Elena Rostova — FLAGGED)</option>
+              </select>
+            </div>
+
+            <button class="btn btn-primary btn-block" id="btnFindPath">
+              <i class="fa-solid fa-route"></i> Trace Path
+            </button>
+          </div>
+
+          <div class="path-results-container" id="pathResultsBox">
+            <!-- Path results rendered here -->
+          </div>
+        </div>
+
+      </aside>
+    </main>
+
+    <!-- Mobile Bottom Navigation (Visible only on <= 900px screens) -->
+    <nav class="mobile-tab-bar" id="mobileNavBar">
+      <button class="mobile-tab-item" data-panel="leftPanel">
+        <i class="fa-solid fa-list-check"></i>
+        <span>Patterns</span>
+      </button>
+      <button class="mobile-tab-item active" data-panel="centerPanel">
+        <i class="fa-solid fa-project-diagram"></i>
+        <span>Graph</span>
+      </button>
+      <button class="mobile-tab-item" data-panel="rightPanel">
+        <i class="fa-solid fa-circle-info"></i>
+        <span>Inspector</span>
+      </button>
+    </nav>
+
+    <!-- Application Minimal Footer -->
+    <footer class="app-footer">
+      <div class="footer-left">
+        <span>Powered by <strong>CognoDB Cloud</strong> &amp; <strong>openCypher</strong></span>
+      </div>
+      <div class="footer-right">
+        <span>Wexa AI Candidate Assessment</span>
+      </div>
+    </footer>
+
+  </div>
+
+  <script src="js/graphRenderer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
