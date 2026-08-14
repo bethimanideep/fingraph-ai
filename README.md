@@ -209,7 +209,8 @@ When CognoDB Cloud is unreachable, a prominent red alert banner with `[ Retry Co
 
 ## 🌐 Hosted Demo & Screen Recording
 
-- **Live Hosted Application**: **[https://fingraph-ai-six.vercel.app](https://fingraph-ai-six.vercel.app)** (Deployed on Vercel with live CognoDB Cloud connection)
+- **Live Application (Render)**: **[https://fingraph-ai.onrender.com](https://fingraph-ai.onrender.com)**
+- **Live Application (Vercel)**: **[https://fingraph-ai-six.vercel.app](https://fingraph-ai-six.vercel.app)**
 - **Screen Recording**: *(Add your 1–2 min video walkthrough link here)*
 
 ---
