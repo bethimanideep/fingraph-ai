@@ -4,6 +4,13 @@ A complete, production-style web application backed by **CognoDB Cloud** (using 
 
 ---
 
+## 🌐 Hosted Demo & Screen Recording
+
+- **Live Application (Vercel)**: **[https://fingraph-ai-six.vercel.app](https://fingraph-ai-six.vercel.app)**
+- **Screen Recording**: *https://youtu.be/A0J0JPR9H6M*
+
+---
+
 ## 🎯 Use Case Overview & "Why a Graph Database?"
 
 ### Use Case
@@ -204,18 +211,3 @@ Right panel shows per-entity risk score, property details, connected relationshi
 When CognoDB Cloud is unreachable, a prominent red alert banner with `[ Retry Connection ]` button appears.
 
 > **Note**: Replace the descriptions above with actual screenshots before submission. Use browser DevTools to capture at each investigation state.
-
----
-
-## 🌐 Hosted Demo & Screen Recording
-
-- **Live Application (Render)**: **[https://fingraph-ai.onrender.com](https://fingraph-ai.onrender.com)**
-- **Live Application (Vercel)**: **[https://fingraph-ai-six.vercel.app](https://fingraph-ai-six.vercel.app)**
-- **Screen Recording**: *(Add your 1–2 min video walkthrough link here)*
-
----
-
-## 📄 License
-
-This project was built as a take-home assignment for Wexa AI. All code is original.
-
